@@ -57,11 +57,12 @@ int main()
 	textureSystem.reserve(texture2);
 	textureSystem.initialize(texture1, "C:/Projects/RedSandProject/resources/container.jpg", GL_REPEAT, GL_REPEAT, GL_LINEAR, GL_LINEAR, GL_RGB);
 	textureSystem.initialize(texture2, "C:/Projects/RedSandProject/resources/awesomeface.png", GL_REPEAT, GL_REPEAT, GL_LINEAR, GL_LINEAR, GL_RGBA);
-
 	shaderA.use();
 	shaderA.setInt("texture1", 0);
 	shaderA.setInt("texture2", 1);
 
+
+	// MAIN LOOP
 	while (!glfwWindowShouldClose(window))
 	{
 		processInput(window);
@@ -89,8 +90,9 @@ int main()
 		glfwPollEvents();
 	}
 
-	glBufferSystem.release(glBuffer);
 
+	// CLEAN
+	glBufferSystem.release(glBuffer);
 	glfwTerminate();
 	return 0;
 }
