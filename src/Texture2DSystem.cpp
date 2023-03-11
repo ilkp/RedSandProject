@@ -1,16 +1,49 @@
 
 #include "core.h"
-#include <iostream>
-#include "stb_image.h"
 
-#include <glad/glad.h>
+Texture2DSystem::Texture2DSystem(uint64_t size) : size(size)
+{
+	data = new std::pair<Texture2D, unsigned int>[size];
+	top++;
+	Texture2D& tex = data[0].first;
+	tex.attributes = Texture2DAttributes(GL_REPEAT, GL_REPEAT, GL_LINEAR, GL_LINEAR, GL_RGB);
+	tex.height = 2;
+	tex.width = 2;
+	tex.nChannels = 3;
+	tex.pixels = new unsigned char[] {
+		100, 0, 100,
+		0, 0, 0,
+		100, 0, 100,
+		0, 0, 0
+	};
+	glGenTextures(1, &(data[0].second));
+	glBindTexture(GL_TEXTURE_2D, data[0].second);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, tex.attributes.textureWrapS);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, tex.attributes.textureWrapT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, tex.attributes.minFilter);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, tex.attributes.magFilter);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB,
+		tex.width,
+		tex.height,
+		0,
+		tex.attributes.format,
+		GL_UNSIGNED_BYTE,
+		tex.pixels);
+	glGenerateMipmap(GL_TEXTURE_2D);
+}
+
+Texture2DSystem::~Texture2DSystem()
+{
+	for (int i = 0; i < size; ++i)
+		delete[](data[i].first.pixels);
+	delete[](data);
+}
 
 void Texture2DSystem::reserve(Entity entity)
 {
-	mutex.lock();
+	std::unique_lock<std::mutex> lock(mutex);
 	if (!indices.contains(entity))
 		indices.insert(std::make_pair(entity, top++));
-	mutex.unlock();
 }
 
 //void Texture2DSystem::release(Entity entity)
@@ -33,46 +66,51 @@ void Texture2DSystem::reserve(Entity entity)
 //	mutex.unlock();
 //}
 
-std::optional<unsigned int> Texture2DSystem::get(Entity entity)
+std::optional<Texture2D> Texture2DSystem::getTexture(Entity entity)
 {
-	mutex.lock();
+	std::unique_lock<std::mutex> lock(mutex);
 	if (!indices.contains(entity))
-	{
-		mutex.unlock();
 		return {};
-	}
-	unsigned int id = data[indices[entity]].id;
-	mutex.unlock();
+	Texture2D texture = data[indices[entity]].first;
+	return texture;
+}
+
+unsigned int Texture2DSystem::getId(Entity entity)
+{
+	std::unique_lock<std::mutex> lock(mutex);
+	if (!indices.contains(entity))
+		return data[0].second;
+	unsigned int id = data[indices[entity]].second;
 	return id;
 }
 
-bool Texture2DSystem::initialize(Entity entity, std::string filePath, int textureWrapS, int textureWrapT, int minFilter, int magFilter, int format)
+void Texture2DSystem::set(Entity entity, Texture2D texture)
 {
-	mutex.lock();
+	std::unique_lock<std::mutex> lock(mutex);
 	if (!indices.contains(entity))
-	{
-		mutex.unlock();
-		return false;
-	}
-	bool success = false;
-	Texture2D& tex = data[indices[entity]];
-	glGenTextures(1, &tex.id);
-	glBindTexture(GL_TEXTURE_2D, tex.id);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, textureWrapS);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, textureWrapT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, minFilter);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, magFilter);
-	unsigned char* file = stbi_load(filePath.c_str(), &tex.width, &tex.height, &tex.nChannels, 0);
-	if (file)
-	{
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tex.width, tex.height, 0, format, GL_UNSIGNED_BYTE, file);
-		glGenerateMipmap(GL_TEXTURE_2D);
-		success = true;
-	}
-	if (!success)
-		std::cout << "Failed to load texture" << std::endl;
+		return;
+	data[indices[entity]].first = texture;
+}
 
-	mutex.unlock();
-	stbi_image_free(file);
-	return success;
+void Texture2DSystem::load(Entity entity)
+{
+	std::unique_lock<std::mutex> lock(mutex);
+	if (!indices.contains(entity))
+		return;
+	Texture2D& texture = data[indices[entity]].first;
+	unsigned int& id = data[indices[entity]].second;
+	glGenTextures(1, &id);
+	glBindTexture(GL_TEXTURE_2D, id);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, texture.attributes.textureWrapS);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, texture.attributes.textureWrapT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, texture.attributes.minFilter);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, texture.attributes.magFilter);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB,
+		texture.width,
+		texture.height,
+		0,
+		texture.attributes.format,
+		GL_UNSIGNED_BYTE,
+		texture.pixels);
+	glGenerateMipmap(GL_TEXTURE_2D);
 }

@@ -1,4 +1,5 @@
 #pragma once
+#include <glad/glad.h>
 #include <glm/glm.hpp>
 #include <stdint.h>
 #include <unordered_map>
@@ -26,19 +27,32 @@ struct Mesh3D
 	glm::fvec2* uvs;
 };
 
+struct Texture2DAttributes
+{
+	Texture2DAttributes() {};
+	Texture2DAttributes(int textureWrapS, int textureWrapT, int minFilter, int magFilter, int format)
+		: textureWrapS(textureWrapS), textureWrapT(textureWrapT), minFilter(minFilter), magFilter(magFilter), format(format) {}
+	int textureWrapS = GL_REPEAT;
+	int textureWrapT = GL_REPEAT;
+	int minFilter = GL_LINEAR;
+	int magFilter = GL_LINEAR;
+	int format = GL_RGB;
+};
+
 struct Texture2D
 {
+	unsigned char* pixels;
 	int width;
 	int height;
 	int nChannels;
-	unsigned int id;
+	Texture2DAttributes attributes;
 };
 
 struct GLBuffers
 {
-	unsigned int VAO;
-	unsigned int VBO;
-	unsigned int EBO;
+	unsigned int vertexArrayObject;
+	unsigned int vertexBufferObject;
+	unsigned int elementBufferObject;
 };
 
 struct VertexAttributes
@@ -57,13 +71,14 @@ public:
 private:
 	Entity top = 0;
 	std::set<Entity> releasedEntities;
+	std::mutex mutex;
 };
 
 class Texture2DSystem
 {
 public:
-	Texture2DSystem(uint64_t size) { data = new Texture2D[size]; }
-	~Texture2DSystem() { delete[](data); }
+	Texture2DSystem(uint64_t size);
+	~Texture2DSystem();
 	Texture2DSystem(const Texture2DSystem& other) = delete;
 	Texture2DSystem(Texture2DSystem&& other) = delete;
 	Texture2DSystem& operator=(const Texture2DSystem other) = delete;
@@ -71,13 +86,16 @@ public:
 
 	void reserve(Entity entity);
 	//void release(Entity entity);
-	std::optional<unsigned int> get(Entity entity);
-	bool initialize(Entity entity, std::string filePath, int textureWrapS, int textureWrapT, int minFilter, int magFilter, int format);
+	std::optional<Texture2D> getTexture(Entity entity);
+	unsigned int getId(Entity entity);
+	void set(Entity entity, Texture2D texture);
+	void load(Entity entity);
 
 private:
+	uint64_t size;
 	std::unordered_map<Entity, uint64_t> indices;
 	std::set<uint64_t> releasedIndices;
-	Texture2D* data;
+	std::pair<Texture2D, unsigned int>* data;
 	uint64_t top = 0;
 	std::mutex mutex;
 };
@@ -91,6 +109,30 @@ public:
 	GLBufferSystem(GLBufferSystem&& other) = delete;
 	GLBufferSystem& operator=(const GLBufferSystem other) = delete;
 	GLBufferSystem& operator=(GLBufferSystem&& other) = delete;
+
+	void reserve(Entity entity);
+	void release(Entity entity);
+	std::optional<GLBuffers> get(Entity entity);
+	bool load(Entity entity, std::vector<VertexAttributes> attributes, std::vector<float> vertices, std::vector<unsigned int> triangles);
+	void clean(Entity entity);
+
+private:
+	std::unordered_map<Entity, uint64_t> indices;
+	std::set<uint64_t> releasedIndices;
+	GLBuffers* data;
+	uint64_t top = 0;
+	std::mutex mutex;
+};
+
+class MeshSystem
+{
+public:
+	MeshSystem(uint64_t size) { data = new GLBuffers[size]; }
+	~MeshSystem() { delete[](data); }
+	MeshSystem(const MeshSystem& other) = delete;
+	MeshSystem(MeshSystem&& other) = delete;
+	MeshSystem& operator=(const MeshSystem other) = delete;
+	MeshSystem& operator=(MeshSystem&& other) = delete;
 
 	void reserve(Entity entity);
 	void release(Entity entity);

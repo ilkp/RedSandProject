@@ -15,14 +15,14 @@ void processInput(GLFWwindow* window);
 
 int main()
 {
-	EntityManager entityManager;
-	Texture2DSystem textureSystem(10);
-	GLBufferSystem glBufferSystem(2);
-
 	glfwInit();
 	GLFWwindow* window = createWindow();
 	if (window == nullptr)
 		return -1;
+
+	EntityManager entityManager;
+	Texture2DSystem textureSystem(10);
+	GLBufferSystem glBufferSystem(2);
 
 	Shader shaderA("shader.vert", "shader.frag");
 	Shader shaderB("color_shader.vert", "color_shader.frag");
@@ -47,16 +47,25 @@ int main()
 		VertexAttributes { 2, 5 * sizeof(float), 3 * sizeof(float) }
 	};
 	glBufferSystem.reserve(glBuffer);
-	glBufferSystem.initialize(glBuffer, vertexAttrb, vertices, triangles);
+	glBufferSystem.load(glBuffer, vertexAttrb, vertices, triangles);
 
 
 	// TEXTURES
-	Entity texture1 = entityManager.make();
-	Entity texture2 = entityManager.make();
-	textureSystem.reserve(texture1);
-	textureSystem.reserve(texture2);
-	textureSystem.initialize(texture1, "C:/Projects/RedSandProject/resources/container.jpg", GL_REPEAT, GL_REPEAT, GL_LINEAR, GL_LINEAR, GL_RGB);
-	textureSystem.initialize(texture2, "C:/Projects/RedSandProject/resources/awesomeface.png", GL_REPEAT, GL_REPEAT, GL_LINEAR, GL_LINEAR, GL_RGBA);
+	Texture2D texture1, texture2;
+	Entity tex1_entity = entityManager.make();
+	textureSystem.reserve(tex1_entity);
+	texture1.attributes = Texture2DAttributes(GL_REPEAT, GL_REPEAT, GL_LINEAR, GL_LINEAR, GL_RGB);
+	texture1.pixels = stbi_load("C:/Projects/RedSandProject/resources/container.jpg", &texture1.width, &texture1.height, &texture1.nChannels, 0);
+	textureSystem.set(tex1_entity, texture1);
+	textureSystem.load(tex1_entity);
+
+	Entity tex2_entity = entityManager.make();
+	textureSystem.reserve(tex2_entity);
+	texture2.attributes = Texture2DAttributes(GL_REPEAT, GL_REPEAT, GL_LINEAR, GL_LINEAR, GL_RGBA);
+	texture2.pixels = stbi_load("C:/Projects/RedSandProject/resources/awesomeface.png", &texture2.width, &texture2.height, &texture2.nChannels, 0);
+	textureSystem.set(tex2_entity, texture2);
+	textureSystem.load(tex2_entity);
+
 	shaderA.use();
 	shaderA.setInt("texture1", 0);
 	shaderA.setInt("texture2", 1);
@@ -71,9 +80,9 @@ int main()
 		glClear(GL_COLOR_BUFFER_BIT);
 
 		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, textureSystem.get(texture1).value());
+		glBindTexture(GL_TEXTURE_2D, textureSystem.getId(tex1_entity));
 		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, textureSystem.get(texture2).value());
+		glBindTexture(GL_TEXTURE_2D, textureSystem.getId(tex2_entity));
 
 		glm::mat4 trans = glm::mat4(1.0f);
 		trans = glm::rotate(trans, glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
@@ -83,7 +92,7 @@ int main()
 		unsigned int transformLoc = glGetUniformLocation(shaderA.id, "transform");
 		glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(trans));
 
-		glBindVertexArray(glBufferSystem.get(glBuffer).value().VAO);
+		glBindVertexArray(glBufferSystem.get(glBuffer).value().vertArrayObject);
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
 		glfwSwapBuffers(window);

@@ -2,6 +2,7 @@
 
 Entity EntityManager::make()
 {
+	std::unique_lock<std::mutex> lock(mutex);
 	if (releasedEntities.size() == 0)
 		return top++;
 	Entity entity = *releasedEntities.begin();
@@ -11,6 +12,7 @@ Entity EntityManager::make()
 
 void EntityManager::release(Entity entity)
 {
+	std::unique_lock<std::mutex> lock(mutex);
 	releasedEntities.insert(entity);
 	for (std::set<uint64_t>::reverse_iterator it = releasedEntities.rbegin(); it != releasedEntities.rend();)
 	{
