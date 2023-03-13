@@ -3,9 +3,9 @@
 
 Texture2DSystem::Texture2DSystem(uint64_t size) : size(size)
 {
-	data = new std::pair<Texture2D, unsigned int>[size];
+	data = new Component[size];
 	top++;
-	Texture2D& tex = data[0].first;
+	Texture2D& tex = data[0].texture;
 	tex.attributes = Texture2DAttributes(GL_REPEAT, GL_REPEAT, GL_LINEAR, GL_LINEAR, GL_RGB);
 	tex.height = 2;
 	tex.width = 2;
@@ -16,8 +16,8 @@ Texture2DSystem::Texture2DSystem(uint64_t size) : size(size)
 		100, 0, 100,
 		0, 0, 0
 	};
-	glGenTextures(1, &(data[0].second));
-	glBindTexture(GL_TEXTURE_2D, data[0].second);
+	glGenTextures(1, &(data[0].id));
+	glBindTexture(GL_TEXTURE_2D, data[0].id);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, tex.attributes.textureWrapS);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, tex.attributes.textureWrapT);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, tex.attributes.minFilter);
@@ -35,15 +35,15 @@ Texture2DSystem::Texture2DSystem(uint64_t size) : size(size)
 Texture2DSystem::~Texture2DSystem()
 {
 	for (int i = 0; i < size; ++i)
-		delete[](data[i].first.pixels);
+		if (data[i].texture.pixels) delete[](data[i].texture.pixels);
 	delete[](data);
 }
 
-void Texture2DSystem::reserve(Entity entity)
+Texture2D* Texture2DSystem::reserve(Entity entity)
 {
-	std::unique_lock<std::mutex> lock(mutex);
 	if (!indices.contains(entity))
 		indices.insert(std::make_pair(entity, top++));
+	return &data[indices[entity]].texture;
 }
 
 //void Texture2DSystem::release(Entity entity)
@@ -66,51 +66,26 @@ void Texture2DSystem::reserve(Entity entity)
 //	mutex.unlock();
 //}
 
-std::optional<Texture2D> Texture2DSystem::getTexture(Entity entity)
+Texture2D* Texture2DSystem::getTexture(Entity entity) const
 {
-	std::unique_lock<std::mutex> lock(mutex);
-	if (!indices.contains(entity))
-		return {};
-	Texture2D texture = data[indices[entity]].first;
-	return texture;
+	return &data[indices.at(entity)].texture;
 }
 
-unsigned int Texture2DSystem::getId(Entity entity)
+unsigned int Texture2DSystem::getId(Entity entity) const
 {
-	std::unique_lock<std::mutex> lock(mutex);
-	if (!indices.contains(entity))
-		return data[0].second;
-	unsigned int id = data[indices[entity]].second;
-	return id;
+	return data[indices.at(entity)].id;
 }
 
-void Texture2DSystem::set(Entity entity, Texture2D texture)
+void Texture2DSystem::set(Entity entity, const Texture2D& texture)
 {
-	std::unique_lock<std::mutex> lock(mutex);
 	if (!indices.contains(entity))
 		return;
-	data[indices[entity]].first = texture;
+	data[indices[entity]].texture = texture;
 }
 
-void Texture2DSystem::load(Entity entity)
+void Texture2DSystem::set(Entity entity, unsigned int id)
 {
-	std::unique_lock<std::mutex> lock(mutex);
 	if (!indices.contains(entity))
 		return;
-	Texture2D& texture = data[indices[entity]].first;
-	unsigned int& id = data[indices[entity]].second;
-	glGenTextures(1, &id);
-	glBindTexture(GL_TEXTURE_2D, id);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, texture.attributes.textureWrapS);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, texture.attributes.textureWrapT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, texture.attributes.minFilter);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, texture.attributes.magFilter);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB,
-		texture.width,
-		texture.height,
-		0,
-		texture.attributes.format,
-		GL_UNSIGNED_BYTE,
-		texture.pixels);
-	glGenerateMipmap(GL_TEXTURE_2D);
+	data[indices[entity]].id = id;
 }

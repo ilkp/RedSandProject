@@ -1,13 +1,18 @@
 #pragma once
+
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 #include <stdint.h>
 #include <unordered_map>
 #include <set>
-#include <mutex>
-#include <optional>
 
 typedef uint64_t Entity;
+
+struct Bounds2D
+{
+	glm::vec2 min;
+	glm::vec2 max;
+};
 
 struct Bounds3D
 {
@@ -15,16 +20,19 @@ struct Bounds3D
 	glm::vec3 max;
 };
 
-struct Mesh3D
+struct Mesh2D
 {
-	int verticesLength;
-	int trianglesLength;
-	int uvsLength;
-	Bounds3D bounds;
-	float* data;
-	glm::fvec3* vertices;
-	int* triangles;
-	glm::fvec2* uvs;
+	float* vertices;
+	unsigned int* triangles;
+	unsigned int verticesLength;
+	unsigned int trianglesLength;
+	Bounds2D bounds;
+
+	void clean()
+	{
+		delete[](vertices);
+		delete[](triangles);
+	}
 };
 
 struct Texture2DAttributes
@@ -41,7 +49,7 @@ struct Texture2DAttributes
 
 struct Texture2D
 {
-	unsigned char* pixels;
+	unsigned char* pixels = nullptr;
 	int width;
 	int height;
 	int nChannels;
@@ -50,16 +58,18 @@ struct Texture2D
 
 struct GLBuffers
 {
-	unsigned int vertexArrayObject;
-	unsigned int vertexBufferObject;
-	unsigned int elementBufferObject;
+	unsigned int vertexArrayObject = 0;
+	unsigned int vertexBufferObject = 0;
+	unsigned int triangleBuffer = 0;
 };
 
 struct VertexAttributes
 {
+	VertexAttributes(unsigned int dimensions, int strideBytes, int offsetBytes)
+		: dimensions(dimensions), strideBytes(strideBytes), offsetBytes(offsetBytes) {};
 	unsigned int dimensions;
-	int stride;
-	size_t offset;
+	int strideBytes;
+	int offsetBytes;
 };
 
 class EntityManager
@@ -71,7 +81,6 @@ public:
 private:
 	Entity top = 0;
 	std::set<Entity> releasedEntities;
-	std::mutex mutex;
 };
 
 class Texture2DSystem
@@ -84,20 +93,24 @@ public:
 	Texture2DSystem& operator=(const Texture2DSystem other) = delete;
 	Texture2DSystem& operator=(Texture2DSystem&& other) = delete;
 
-	void reserve(Entity entity);
+	Texture2D* reserve(Entity entity);
 	//void release(Entity entity);
-	std::optional<Texture2D> getTexture(Entity entity);
-	unsigned int getId(Entity entity);
-	void set(Entity entity, Texture2D texture);
-	void load(Entity entity);
+	Texture2D* getTexture(Entity entity) const;
+	unsigned int getId(Entity entity) const;
+	void set(Entity entity, const Texture2D& texture);
+	void set(Entity entity, unsigned int id);
 
 private:
+	struct Component
+	{
+		Texture2D texture;
+		unsigned id;
+	};
 	uint64_t size;
 	std::unordered_map<Entity, uint64_t> indices;
 	std::set<uint64_t> releasedIndices;
-	std::pair<Texture2D, unsigned int>* data;
+	Component* data;
 	uint64_t top = 0;
-	std::mutex mutex;
 };
 
 class GLBufferSystem
@@ -112,8 +125,8 @@ public:
 
 	void reserve(Entity entity);
 	void release(Entity entity);
-	std::optional<GLBuffers> get(Entity entity);
-	bool load(Entity entity, std::vector<VertexAttributes> attributes, std::vector<float> vertices, std::vector<unsigned int> triangles);
+	GLBuffers get(Entity entity) const;
+	void set(Entity entity, const GLBuffers& buffers);
 	void clean(Entity entity);
 
 private:
@@ -121,29 +134,32 @@ private:
 	std::set<uint64_t> releasedIndices;
 	GLBuffers* data;
 	uint64_t top = 0;
-	std::mutex mutex;
 };
 
-class MeshSystem
+class Mesh2DSystem
 {
 public:
-	MeshSystem(uint64_t size) { data = new GLBuffers[size]; }
-	~MeshSystem() { delete[](data); }
-	MeshSystem(const MeshSystem& other) = delete;
-	MeshSystem(MeshSystem&& other) = delete;
-	MeshSystem& operator=(const MeshSystem other) = delete;
-	MeshSystem& operator=(MeshSystem&& other) = delete;
+	Mesh2DSystem(uint64_t size) { data = new Mesh2D[size]; }
+	~Mesh2DSystem() { delete[](data); }
+	Mesh2DSystem(const Mesh2DSystem& other) = delete;
+	Mesh2DSystem(Mesh2DSystem&& other) = delete;
+	Mesh2DSystem& operator=(const Mesh2DSystem other) = delete;
+	Mesh2DSystem& operator=(Mesh2DSystem&& other) = delete;
 
 	void reserve(Entity entity);
 	void release(Entity entity);
-	std::optional<GLBuffers> get(Entity entity);
-	bool initialize(Entity entity, std::vector<VertexAttributes> attributes, std::vector<float> vertices, std::vector<unsigned int> triangles);
-	void clean(Entity entity);
+	Mesh2D* get(Entity entity) const;
+	void copy(Entity entity, const Mesh2D& mesh);
+	void copy(Entity entity,
+		const float* vertices, unsigned int verticesSize,
+		const unsigned int* triangles, unsigned int trianglesSize);
+	void calculateBounds(Entity entity, unsigned int stride);
 
 private:
 	std::unordered_map<Entity, uint64_t> indices;
 	std::set<uint64_t> releasedIndices;
-	GLBuffers* data;
+	Mesh2D* data;
 	uint64_t top = 0;
-	std::mutex mutex;
+
+	void clean(Entity entity);
 };

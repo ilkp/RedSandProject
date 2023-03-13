@@ -163,6 +163,7 @@
     <ClCompile Include="glad.c" />
     <ClCompile Include="GLBufferSystem.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Mesh2DSystem.cpp" />
     <ClCompile Include="Shader.cpp" />
     <ClCompile Include="Texture2DSystem.cpp" />
   </ItemGroup>
@@ -177,6 +178,8 @@
     <None Include="color_shader.vert" />
     <None Include="shader.frag" />
     <None Include="shader.vert" />
+    <None Include="spriteShader.frag" />
+    <None Include="spriteShader.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -1,11 +1,6 @@
 #pragma once
 
-#include <glad/glad.h>
-
-#include <string>
-#include <fstream>
-#include <sstream>
-#include <iostream>
+#include <glm/glm.hpp>
 
 class Shader
 {
@@ -14,8 +9,15 @@ public:
 
 	Shader(const char* vertexPath, const char* fragmentPath);
 	~Shader();
-	void use();
-	void setBool(const std::string& name, bool value) const;
-	void setInt(const std::string& name, int value) const;
-	void setFloat(const std::string& name, float value) const;
+	void use() const;
+    void setBool(const char* name, bool value) const;
+    void setInteger(const char* name, int value) const;
+    void setFloat(const char* name, float value) const;
+    void setVector2f(const char* name, float x, float y) const;
+    void setVector2f(const char* name, const glm::vec2& value) const;
+    void setVector3f(const char* name, float x, float y, float z) const;
+    void setVector3f(const char* name, const glm::vec3& value) const;
+    void setVector4f(const char* name, float x, float y, float z, float w) const;
+    void setVector4f(const char* name, const glm::vec4& value) const;
+    void setMatrix4(const char* name, const glm::mat4& matrix) const;
 };
