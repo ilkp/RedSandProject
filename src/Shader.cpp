@@ -8,7 +8,12 @@
 
 #pragma once
 
-Shader::Shader(const char* vertexPath, const char* fragmentPath)
+Shader::~Shader()
+{
+	glDeleteProgram(id);
+}
+
+void Shader::compile(const char* vertexPath, const char* fragmentPath)
 {
 	// get shader code from the files
 	std::string vertexCode;
@@ -29,7 +34,7 @@ Shader::Shader(const char* vertexPath, const char* fragmentPath)
 		vertexCode = vShaderStream.str();
 		fragmentCode = fShaderStream.str();
 	}
-	catch(std::ifstream::failure e)
+	catch (std::ifstream::failure e)
 	{
 		std::cout << "ERROR::SHADER::FILE_NOT_SUCCESFULLY_READ" << std::endl;
 	}
@@ -75,11 +80,6 @@ Shader::Shader(const char* vertexPath, const char* fragmentPath)
 
 	glDeleteShader(vertex);
 	glDeleteShader(fragment);
-}
-
-Shader::~Shader()
-{
-	glDeleteProgram(id);
 }
 
 void Shader::use() const

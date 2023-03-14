@@ -1,6 +1,7 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 
+#include <concepts>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -22,15 +23,31 @@ int main()
 
 	EntityManager entityManager;
 	Texture2DSystem textureSystem(10);
-	GLBufferSystem glBufferSystem(2);
+	EntityComponentSystem<GLBuffers> glBufferSystem(2);
 	Mesh2DSystem meshSystem(2);
+	ShaderSystem shaderSystem(2);
+	RenderUnitSystem renderUnitSystem(5);
 
-	Shader shaderA("shader.vert", "shader.frag");
-	Shader shaderB("color_shader.vert", "color_shader.frag");
+	EntityComponentSystem<Mesh2D> meshSystemB(2);
+
+	RenderSystems2D renderSystems;
+	renderSystems.glBufferSystem = &glBufferSystem;
+	renderSystems.meshSystem = &meshSystem;
+	renderSystems.shaderSystem = &shaderSystem;
+	renderSystems.textureSystem = &textureSystem;
+
+
+	// COMPILE SHADER
+	Entity shader_entity = entityManager.make();
+	Shader* shader = shaderSystem.reserve(shader_entity);
+	shader->compile("shader.vert", "shader.frag");
+	shader->setInteger("texture1", 0);
+	shader->setInteger("texture2", 1);
 
 
 	// MESH AND VERTEX BUFFERS
 	std::vector<float> vertices = {
+		//position		//texture coords
 		-0.5f,  0.5f,	-1.0f,  1.0f,
 		 0.5f,  0.5f,	 1.0f,  1.0f,
 		 0.5f, -0.5f,	 1.0f, -1.0f,
@@ -54,8 +71,8 @@ int main()
 	Mesh2D* mesh = meshSystem.get(mesh_entity);
 	glBufferSystem.set(glBuffer, Render::bindBuffers(
 		vertexAttrb,
-		mesh->vertices, mesh->verticesLength,
-		mesh->triangles, mesh->trianglesLength));
+		mesh->vertices, mesh->verticesSize,
+		mesh->triangles, mesh->trianglesSize));
 
 
 	// TEXTURES
@@ -71,9 +88,14 @@ int main()
 	texture2->pixels = stbi_load("C:/Projects/RedSandProject/resources/awesomeface.png", &texture2->width, &texture2->height, &texture2->nChannels, 0);
 	textureSystem.set(tex2_entity, Render::bindTexture(*texture2));
 
-	shaderA.use();
-	shaderA.setInteger("texture1", 0);
-	shaderA.setInteger("texture2", 1);
+
+	Entity renderUnit_entity = entityManager.make();
+	RenderUnit* renderUnit = renderUnitSystem.reserve(renderUnit_entity);
+	renderUnit->glBuffer = glBuffer;
+	renderUnit->shader = shader_entity;
+	renderUnit->textureBinds.push_back({ GL_TEXTURE0, tex1_entity });
+	renderUnit->textureBinds.push_back({ GL_TEXTURE1, tex2_entity });
+	renderUnit->vertices.insert(mesh_entity);
 
 
 	// MAIN LOOP
@@ -84,21 +106,7 @@ int main()
 		glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, textureSystem.getId(tex1_entity));
-		glActiveTexture(GL_TEXTURE1);
-		glBindTexture(GL_TEXTURE_2D, textureSystem.getId(tex2_entity));
-
-		glm::mat4 trans = glm::mat4(1.0f);
-		//trans = glm::rotate(trans, glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-		//trans = glm::scale(trans, glm::vec3(0.5f, 0.5f, 0.5f));
-
-		shaderA.use();
-		unsigned int transformLoc = glGetUniformLocation(shaderA.id, "transform");
-		glUniformMatrix4fv(transformLoc, 1, GL_FALSE, glm::value_ptr(trans));
-
-		glBindVertexArray(glBufferSystem.get(glBuffer).vertexArrayObject);
-		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+		Render::draw(renderSystems, renderUnitSystem.get(renderUnit_entity));
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();

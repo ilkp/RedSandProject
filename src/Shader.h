@@ -7,8 +7,8 @@ class Shader
 public:
 	unsigned int id;
 
-	Shader(const char* vertexPath, const char* fragmentPath);
 	~Shader();
+    void compile(const char* vertexPath, const char* fragmentPath);
 	void use() const;
     void setBool(const char* name, bool value) const;
     void setInteger(const char* name, int value) const;

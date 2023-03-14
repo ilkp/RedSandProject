@@ -1,5 +1,8 @@
 #pragma once
 
+#include "Shader.h"
+
+#include <concepts>
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 #include <stdint.h>
@@ -7,6 +10,12 @@
 #include <set>
 
 typedef uint64_t Entity;
+
+template<class T>
+concept EntityComponent = requires(T a)
+{
+	{ a.clean() } -> std::convertible_to<void>;
+};
 
 struct Bounds2D
 {
@@ -18,21 +27,6 @@ struct Bounds3D
 {
 	glm::vec3 min;
 	glm::vec3 max;
-};
-
-struct Mesh2D
-{
-	float* vertices;
-	unsigned int* triangles;
-	unsigned int verticesLength;
-	unsigned int trianglesLength;
-	Bounds2D bounds;
-
-	void clean()
-	{
-		delete[](vertices);
-		delete[](triangles);
-	}
 };
 
 struct Texture2DAttributes
@@ -47,22 +41,6 @@ struct Texture2DAttributes
 	int format = GL_RGB;
 };
 
-struct Texture2D
-{
-	unsigned char* pixels = nullptr;
-	int width;
-	int height;
-	int nChannels;
-	Texture2DAttributes attributes;
-};
-
-struct GLBuffers
-{
-	unsigned int vertexArrayObject = 0;
-	unsigned int vertexBufferObject = 0;
-	unsigned int triangleBuffer = 0;
-};
-
 struct VertexAttributes
 {
 	VertexAttributes(unsigned int dimensions, int strideBytes, int offsetBytes)
@@ -71,6 +49,98 @@ struct VertexAttributes
 	int strideBytes;
 	int offsetBytes;
 };
+
+struct TextureBindLocation
+{
+	int textureLocation;
+	Entity texture;
+};
+
+struct RenderUnit
+{
+	Entity glBuffer;
+	Entity shader;
+	std::vector<TextureBindLocation> textureBinds;
+	std::set<Entity> vertices;
+};
+
+struct Mesh2D
+{
+	float* vertices = nullptr;
+	unsigned int* triangles = nullptr;
+	unsigned int verticesSize = 0;
+	unsigned int trianglesSize = 0;
+	Bounds2D bounds{ glm::vec2(0.0f, 0.0f), glm::vec2(0.0f, 0.0f) };
+
+	Mesh2D& operator=(const Mesh2D& other)
+	{
+		if (this != &other)
+		{
+			if (verticesSize != other.verticesSize)
+			{
+				delete[] vertices;
+				vertices = other.verticesSize ? new float[other.verticesSize] : nullptr;
+				verticesSize = other.verticesSize;
+			}
+			memcpy(vertices, other.vertices, sizeof(float) * other.verticesSize);
+			if (trianglesSize != other.trianglesSize)
+			{
+				delete[] triangles;
+				triangles = other.trianglesSize ? new unsigned int[other.trianglesSize] : nullptr;
+				trianglesSize = other.trianglesSize;
+			}
+			memcpy(triangles, other.triangles, sizeof(unsigned int) * other.trianglesSize);
+		}
+		return *this;
+	}
+	Mesh2D& operator=(Mesh2D&& other) noexcept
+	{
+		assert(this != &other);
+		delete[]vertices;
+		delete[]triangles;
+		vertices = other.vertices;
+		triangles = other.triangles;
+		verticesSize = other.verticesSize;
+		trianglesSize = other.trianglesSize;
+		bounds.min = other.bounds.min;
+		bounds.max = other.bounds.max;
+		other.vertices = nullptr;
+		other.triangles = nullptr;
+		other.verticesSize = 0;
+		other.trianglesSize = 0;
+		other.bounds = { glm::vec2(0.0f, 0.0f), glm::vec2(0.0f, 0.0f) };
+		return *this;
+	}
+	void clean()
+	{
+		if (vertices) delete[](vertices);
+		if (triangles) delete[](triangles);
+		vertices = nullptr;
+		triangles = nullptr;
+	}
+}; static_assert(EntityComponent<Mesh2D>);
+
+struct Texture2D
+{
+	unsigned char* pixels = nullptr;
+	int width;
+	int height;
+	int nChannels;
+	Texture2DAttributes attributes;
+
+	void clean()
+	{
+		if (pixels) delete[](pixels);
+	}
+}; static_assert(EntityComponent<Texture2D>);
+
+struct GLBuffers
+{
+	unsigned int vertexArrayObject = 0;
+	unsigned int vertexBufferObject = 0;
+	unsigned int triangleBuffer = 0;
+	void clean() {}
+}; static_assert(EntityComponent<GLBuffers>);
 
 class EntityManager
 {
@@ -81,6 +151,68 @@ public:
 private:
 	Entity top = 0;
 	std::set<Entity> releasedEntities;
+};
+
+template<EntityComponent T>
+class EntityComponentSystem
+{
+public:
+	EntityComponentSystem(uint64_t size)
+	{
+		data = new T[size];
+	}
+	~EntityComponentSystem()
+	{
+		for (auto it = indices.begin(); it != indices.end(); ++it)
+			data[it->second].clean();
+		delete[](data);
+	}
+	EntityComponentSystem(const EntityComponentSystem& other) = delete;
+	EntityComponentSystem(EntityComponentSystem&& other) = delete;
+	EntityComponentSystem& operator=(const EntityComponentSystem other) = delete;
+	EntityComponentSystem& operator=(EntityComponentSystem&& other) = delete;
+	
+	void reserve(Entity entity)
+	{
+		if (!indices.contains(entity))
+			indices.insert(std::make_pair(entity, top++));
+	}
+	void release(Entity entity)
+	{
+		if (!indices.contains(entity))
+			return;
+		uint64_t index = indices[entity];
+		uint64_t topIndex = indices[top - 1];
+		data[indices[entity]].clean();
+		if (index != topIndex)
+		{
+			memcpy(&data[index], &data[topIndex], sizeof(T));
+			indices[indices.find(topIndex)->first] = index;
+		}
+		indices.erase(entity);
+		top--;
+	}
+	T get(Entity entity) const
+	{
+		return data[indices.at(entity)];
+	}
+	void set(Entity entity, const T& component)
+	{
+		if (!indices.contains(entity))
+			reserve(entity);
+		data[indices[entity]] = component;
+	}
+	void set(Entity entity, T&& component)
+	{
+		if (!indices.contains(entity))
+			reserve(entity);
+		data[indices[entity]] = component;
+	}
+
+private:
+	T* data;
+	std::unordered_map<Entity, uint64_t> indices;
+	uint64_t top = 0;
 };
 
 class Texture2DSystem
@@ -113,28 +245,28 @@ private:
 	uint64_t top = 0;
 };
 
-class GLBufferSystem
-{
-public:
-	GLBufferSystem(uint64_t size) { data = new GLBuffers[size]; }
-	~GLBufferSystem() { delete[](data); }
-	GLBufferSystem(const GLBufferSystem& other) = delete;
-	GLBufferSystem(GLBufferSystem&& other) = delete;
-	GLBufferSystem& operator=(const GLBufferSystem other) = delete;
-	GLBufferSystem& operator=(GLBufferSystem&& other) = delete;
-
-	void reserve(Entity entity);
-	void release(Entity entity);
-	GLBuffers get(Entity entity) const;
-	void set(Entity entity, const GLBuffers& buffers);
-	void clean(Entity entity);
-
-private:
-	std::unordered_map<Entity, uint64_t> indices;
-	std::set<uint64_t> releasedIndices;
-	GLBuffers* data;
-	uint64_t top = 0;
-};
+//class GLBufferSystem
+//{
+//public:
+//	GLBufferSystem(uint64_t size) { data = new GLBuffers[size]; }
+//	~GLBufferSystem() { delete[](data); }
+//	GLBufferSystem(const GLBufferSystem& other) = delete;
+//	GLBufferSystem(GLBufferSystem&& other) = delete;
+//	GLBufferSystem& operator=(const GLBufferSystem other) = delete;
+//	GLBufferSystem& operator=(GLBufferSystem&& other) = delete;
+//
+//	void reserve(Entity entity);
+//	void release(Entity entity);
+//	GLBuffers get(Entity entity) const;
+//	void set(Entity entity, const GLBuffers& buffers);
+//	void clean(Entity entity);
+//
+//private:
+//	std::unordered_map<Entity, uint64_t> indices;
+//	std::set<uint64_t> releasedIndices;
+//	GLBuffers* data;
+//	uint64_t top = 0;
+//};
 
 class Mesh2DSystem
 {
@@ -162,4 +294,58 @@ private:
 	uint64_t top = 0;
 
 	void clean(Entity entity);
+};
+
+class ShaderSystem
+{
+public:
+	ShaderSystem(uint64_t size) { data = new Shader[size]; }
+	~ShaderSystem() { delete[](data); }
+	ShaderSystem(const ShaderSystem& other) = delete;
+	ShaderSystem(ShaderSystem&& other) = delete;
+	ShaderSystem& operator=(const ShaderSystem other) = delete;
+	ShaderSystem& operator=(ShaderSystem&& other) = delete;
+
+	Shader* reserve(Entity entity);
+	void release(Entity entity);
+	Shader* get(Entity entity) const { return &data[indices.at(entity)]; }
+
+private:
+	std::unordered_map<Entity, uint64_t> indices;
+	std::set<uint64_t> releasedIndices;
+	Shader* data;
+	uint64_t top = 0;
+
+	void clean(Entity entity);
+};
+
+class RenderUnitSystem
+{
+public:
+	RenderUnitSystem(uint64_t size) { data = new RenderUnit[size]; }
+	~RenderUnitSystem() { delete[](data); }
+	RenderUnitSystem(const RenderUnitSystem& other) = delete;
+	RenderUnitSystem(RenderUnitSystem&& other) = delete;
+	RenderUnitSystem& operator=(const RenderUnitSystem other) = delete;
+	RenderUnitSystem& operator=(RenderUnitSystem&& other) = delete;
+
+	RenderUnit* reserve(Entity entity);
+	void release(Entity entity);
+	RenderUnit* get(Entity entity) const;
+
+private:
+	std::unordered_map<Entity, uint64_t> indices;
+	std::set<uint64_t> releasedIndices;
+	RenderUnit* data;
+	uint64_t top = 0;
+
+	void clean(Entity entity);
+};
+
+struct RenderSystems2D
+{
+	EntityComponentSystem<GLBuffers>* glBufferSystem;
+	ShaderSystem* shaderSystem;
+	Texture2DSystem* textureSystem;
+	Mesh2DSystem* meshSystem;
 };

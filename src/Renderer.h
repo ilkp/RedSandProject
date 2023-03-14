@@ -8,7 +8,7 @@
 
 /*
 * bufferit
-* vertexit & texcoord
+* vertexit & texcoordww
 * shader
 * MVP-matrix
 * ikkuna
@@ -16,6 +16,19 @@
 
 namespace Render
 {
+	void draw(const RenderSystems2D& renderSystems, const RenderUnit* renderUnit)
+	{
+		for (auto it = renderUnit->textureBinds.begin(); it != renderUnit->textureBinds.end(); ++it)
+		{
+			glActiveTexture(it->textureLocation);
+			glBindTexture(GL_TEXTURE_2D, renderSystems.textureSystem->getId(it->texture));
+		}
+		renderSystems.shaderSystem->get(renderUnit->shader)->use();
+		glBindVertexArray(renderSystems.glBufferSystem->get(renderUnit->glBuffer).vertexArrayObject);
+		for (auto it = renderUnit->vertices.begin(); it != renderUnit->vertices.end(); ++it)
+			glDrawElements(GL_TRIANGLES, renderSystems.meshSystem->get(*it)->trianglesSize, GL_UNSIGNED_INT, 0);
+	}
+
 	GLBuffers bindBuffers(
 		std::vector<VertexAttributes> attributes,
 		float* vertices, unsigned int verticesSize,
@@ -68,17 +81,6 @@ namespace Render
 		glGenerateMipmap(GL_TEXTURE_2D);
 		return id;
 	}
-
-	//void drawSprite(const Shader& shader, const unsigned textureId, const unsigned vertexArrayObject, const glm::mat4& mvp)
-	//{
-	//	shader.use();
-	//	shader.setMatrix4("mvp", mvp);
-	//	glActiveTexture(GL_TEXTURE0);
-	//	glBindTexture(GL_TEXTURE_2D, textureId);
-	//	glBindVertexArray(vertexArrayObject);
-	//	glDrawArrays(GL_TRIANGLES, 0, 6);
-	//	glBindVertexArray(0);
-	//}
 
 	void framebufferSizeCallback(GLFWwindow* window, int width, int height)
 	{

@@ -159,12 +159,15 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="EntityComponentSystem.cpp" />
     <ClCompile Include="EntityManager.cpp" />
     <ClCompile Include="glad.c" />
     <ClCompile Include="GLBufferSystem.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Mesh2DSystem.cpp" />
+    <ClCompile Include="RenderUnitSystem.cpp" />
     <ClCompile Include="Shader.cpp" />
+    <ClCompile Include="ShaderSystem.cpp" />
     <ClCompile Include="Texture2DSystem.cpp" />
   </ItemGroup>
   <ItemGroup>
